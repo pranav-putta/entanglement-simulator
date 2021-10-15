@@ -20,7 +20,7 @@ class SimEnvironment:
         self.network = Network(root=Cell.root())
 
     def run_until_size(self, size: int):
-        while len(self.network.cell_centers) < size:
+        while len(self.network.centers) < size:
             self.step()
             self.generation += 1
 
@@ -30,6 +30,50 @@ class SimEnvironment:
             self.generation += 1
 
     def step(self):
+        N = len(self.network)
+        old_centers = self.network.centers
+        old_rotations = self.network.rotations
+        old_bud_scars = self.network.mean_bud_scar_angle
+
+        # generate polar and azimuthal angles
+        delta_angle = np.array([Stats.generate_polar_angle(N), Stats.generate_azimuthal_angle(N)]).transpose()
+
+        # generate new bud angles: point in opposite direction of bud scars and generate a new bud there
+        new_bud_angles = -old_bud_scars + delta_angle
+        rx, ry, rz = self.config.cell_properties.radius
+        x = rx * np.sin(new_bud_angles[:, 0]) * np.cos(new_bud_angles[:, 1])
+        y = ry * np.sin(new_bud_angles[:, 0]) * np.sin(new_bud_angles[:, 1])
+        z = rz * np.cos(new_bud_angles[:, 0])
+
+        surface_points = np.array([x, y, z]).transpose()
+        gradient = 2 * surface_points
+        # normalize gradient
+        gradient = gradient / np.linalg.norm(gradient, axis=1).reshape(-1, 1)
+        gradient = (old_rotations @ np.expand_dims(gradient, axis=2)).reshape(gradient.shape)
+
+        D = np.linalg.norm(surface_points, axis=1)
+        new_centers = old_centers + (D + rx).reshape(-1, 1) * gradient
+
+        # calculate rotation matrices
+        v1 = np.tile(np.array([rx, 0, 0]), (N, 1))
+        v2 = gradient
+        rotations = LinAlg.rotation_matrix_3d_vecs(v1, v2)
+
+        idxs_to_remove = LinAlg.check_overlaps(np.vstack([old_centers, new_centers]),
+                                               np.vstack([old_rotations, rotations]),
+                                               self.config.cell_properties.radius, len(old_centers))
+
+        keep_slice = np.arange(N)
+        # np.delete(np.arange(len(new_centers)), idxs_to_remove)
+
+        new_centers = new_centers[keep_slice]
+        rotations = rotations[keep_slice]
+        new_bud_angles = new_bud_angles[keep_slice]
+        mother_ids = self.network.ids[keep_slice]
+
+        self.network.add_cells(len(keep_slice), new_centers, new_bud_angles, rotations, mother_ids, self.generation)
+
+    def old_step(self):
         old_centers = self.network.cell_centers
         old_rotations = self.network.cell_rotations
         old_bud_vecs = self.network.budding_vectors
@@ -46,8 +90,8 @@ class SimEnvironment:
         gradient = 2 * surface_points
         # normalize gradient
         gradient = gradient / np.linalg.norm(gradient, axis=1).reshape(-1, 1)
-        gradient = (old_rotations @ gradient.reshape(*gradient.shape, 1)).reshape(gradient.shape[0],
-                                                                                  gradient.shape[1])
+        gradient = (old_rotations @ np.expand_dims(gradient, axis=2)).reshape(gradient.shape[0],
+                                                                              gradient.shape[1])
 
         D = np.linalg.norm(surface_points, axis=1)
         new_centers = old_centers + (D + rx).reshape(-1, 1) * gradient
@@ -61,6 +105,7 @@ class SimEnvironment:
                                                np.vstack([old_rotations, rotations]),
                                                self.config.cell_properties.radius, len(old_centers))
         keep_slice = np.delete(np.arange(len(new_centers)), idxs_to_remove)
+
         new_centers = new_centers[keep_slice]
         surface_points = surface_points[keep_slice]
         rotations = rotations[keep_slice]

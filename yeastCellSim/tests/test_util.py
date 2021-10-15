@@ -14,8 +14,8 @@ class UtilTest(unittest.TestCase):
         azimuthal_angle_dist = Stats.generate_azimuthal_angle(n)
 
         fig, axs = plt.subplots(1, 2, squeeze=True)
-        axs[0].hist(polar_angle_dist)
-        axs[1].hist(azimuthal_angle_dist)
+        axs[0].hist(polar_angle_dist * 180 / 3.14)
+        axs[1].hist(azimuthal_angle_dist * 180 / 3.14)
 
         plt.show()
 

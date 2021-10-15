@@ -16,8 +16,8 @@ def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarra
     rx, ry, rz = config.cell_properties.radius
 
     # Set of all spherical angles:
-    u = np.linspace(0, 2 * np.pi, 100)
-    v = np.linspace(0, np.pi, 100)
+    u = np.linspace(0, 2 * np.pi, 50)
+    v = np.linspace(0, np.pi, 50)
 
     colors = ['blue', 'green', 'red', 'pink', 'yellow',
               'cyan', 'salmon', 'tomato', 'slategrey', 'orange']
@@ -36,7 +36,7 @@ def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarra
         z = rz * np.outer(np.ones_like(u), np.cos(v))
         z = z.reshape(-1)
 
-        arr = (rotations[i] @ np.array([x, y, z])).reshape(3, 100, 100)
+        arr = (rotations[i] @ np.array([x, y, z])).reshape(3, 50, 50)
         x, y, z = arr[0], arr[1], arr[2]
         x += cell[0]
         y += cell[1]

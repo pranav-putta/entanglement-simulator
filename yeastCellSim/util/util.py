@@ -28,11 +28,11 @@ class Stats:
 
     @staticmethod
     def generate_polar_angle(n: int):
-        return Stats._sample_uniform_dist(0, 150, 3, n)
+        return Stats._sample_uniform_dist(0, 100, 3, n) * np.pi / 180.0
 
     @staticmethod
     def generate_azimuthal_angle(n: int):
-        return Stats._sample_uniform_dist(0, 300, 1, n)
+        return Stats._sample_uniform_dist(0, 80, 1, n) * np.pi / 180.0
 
 
 class LinAlg:
@@ -47,6 +47,30 @@ class LinAlg:
         rotation_matrix = np.eye(3) + kmat + (kmat @ kmat) * np.reshape((1 - c) / (0.00000001 + s ** 2),
                                                                         (len(v1), 1, 1))
         return rotation_matrix
+
+    @staticmethod
+    def smart_collision(ids: np.ndarray, centers: np.ndarray, radii: np.ndarray):
+        # make big bounding box
+        radius = max(radii)
+        mins = np.min(centers, axis=0) - radius
+        maxs = np.max(centers, axis=0) + radius
+        space_dims = (maxs - mins) // 1000
+
+        spatial_graph = dict()
+
+        def hash_point(pt: np.ndarray, id):
+            key = tuple(pt // space_dims)
+            if key in spatial_graph:
+                spatial_graph[key].add(id)
+            else:
+                spatial_graph[key] = set(id)
+
+        for i in range(8):
+            corners = centers + np.array([radius * (i % 2), radius * (i // 2) % 2, radius * (i // 4) % 2])
+            for corner in corners:
+                hash_point(corner)
+
+        print(spatial_graph)
 
     @staticmethod
     def check_overlaps(centers: np.ndarray, rotations: np.ndarray, radii: np.ndarray, old_cells_size: int):
