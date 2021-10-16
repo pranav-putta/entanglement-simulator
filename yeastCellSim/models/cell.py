@@ -96,7 +96,7 @@ class Network:
         if N == 0:
             return
         df = pd.DataFrame(
-            {'id': np.arange(mothers.max() + 1, mothers.max() + N + 1), 'center': list(centers),
+            {'id': np.arange(self.ids.max() + 1, self.ids.max() + N + 1), 'center': list(centers),
              'rotation': list(rotations),
              'parent_bud_scar_angle': list(bud_angles), 'generation': np.repeat(generation, N),
              'mother_id': list(mothers)})

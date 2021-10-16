@@ -4,11 +4,10 @@ from util.util import ConfigLoader
 from matplotlib import pyplot as plt
 import numpy as np
 
-np.random.seed(989)
 
 config = ConfigLoader.load_config()
 simulation = SimEnvironment(config)
-simulation.run_until_size(30)
+simulation.run_until_size(75)
 print(f'Number of cells: {len(simulation.network.centers)}')
 print(f'Number of generations: {simulation.generation}')
 

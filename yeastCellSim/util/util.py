@@ -124,7 +124,7 @@ class LinAlg:
         return bounding_radius
 
     @staticmethod
-    def smart_collision(ids: tuple, centers: tuple, rotations: tuple, radii: np.ndarray, bound_threshold=0.3):
+    def smart_collision(ids: tuple, centers: tuple, rotations: tuple, radii: np.ndarray, bound_volume=0):
         parent_ids, child_ids = ids
         parent_centers, child_centers = centers
         parent_rots, child_rots = rotations
@@ -149,29 +149,43 @@ class LinAlg:
             else:
                 spatial_graph[key] = set([id])
 
+        for i in range(len(centers)):
+            hash_point(centers[i], i)
+
         for i in range(8):
             corners = centers + bounding_radius * np.array(
                 [2 * (i % 2) - 1, 2 * ((i // 2) % 2) - 1, 2 * ((i // 4) % 2) - 1])
             for j in range(len(corners)):
                 hash_point(corners[j], j)
 
+        max_bucket_size = 0
+        for val in spatial_graph.values():
+            max_bucket_size = max(max_bucket_size, len(val))
         removed_ids = set()
+        print(f'\nNumber of cells: {len(centers)}, checking max: {max_bucket_size}')
+        #spatial_graph = {(0, 0): np.arange(len(centers))}
         # check collisions
         for block, collision_ids in spatial_graph.items():
-            collision_ids = list(set(collision_ids) - removed_ids)
+            collision_ids = np.array(list(set(collision_ids) - removed_ids))
             n = len(collision_ids)
             collisions = np.zeros(shape=(n, n))
             for i in range(n):
                 for j in range(i + 1, n):
                     # index of object from master list
                     ci, cj = collision_ids[i], collision_ids[j]
+
+                    # don't check two parents, we know they aren't overlapping
+                    if ids[ci] in parent_ids and ids[cj] in parent_ids:
+                        continue
                     # check collision on each axis
                     c1, c2 = centers[ci], centers[cj]
                     br1, br2 = bounding_radius[ci], bounding_radius[cj]
                     s1, s2 = c1 - br1, c2 - br2
                     e1, e2 = c1 + br1, c2 + br2
                     starts, ends = np.vstack([s1, s2]), np.vstack([e1, e2])
-                    if np.all(np.max(starts, axis=0) < np.min(ends, axis=0) - bound_threshold):
+                    if np.all(np.max(starts, axis=0) < np.min(ends, axis=0)):
+                        if np.prod(np.abs(np.max(starts, axis=0) - np.min(ends, axis=0))) < bound_volume:
+                            continue
                         # collision detected
                         collisions[i][j] = 1
                         collisions[j][i] = 1
@@ -186,64 +200,14 @@ class LinAlg:
                 else:
                     child_removals = np.argwhere(collisions[remove] == 1)
                     for child in child_removals:
+                        child_id = ids[collision_ids[int(child)]]
+
+                        # check if child of parent. make sure the child is only overlapping with its parent
+                        if (not np.all(np.argwhere(child_ids == child_id) == np.argwhere(
+                                parent_ids == ids[collision_ids[remove]]))) or np.sum(collisions[int(child), :]) > 1:
+                            removed_ids.add(ids[collision_ids[int(child)]])
+
                         collisions[int(child), :] = np.zeros(n)
                         collisions[:, int(child)] = np.zeros(n)
-                        # check if child of parent, ignore
-                        removed_ids.add(ids[collision_ids[int(child)]])
         print(f'{len(removed_ids)} Collisions Found for {len(ids)} nodes.')
         return removed_ids
-
-    @staticmethod
-    def check_overlaps(centers: np.ndarray, rotations: np.ndarray, radii: np.ndarray, old_cells_size: int):
-        radii = np.array(radii)
-        start = np.tile(radii, (centers.shape[0], 1))
-        start = -np.abs((rotations @ start.reshape(*start.shape, 1)).reshape(start.shape)) + centers
-        start = start.T
-        end = np.tile(radii, (centers.shape[0], 1))
-        end = np.abs((rotations @ end.reshape(*end.shape, 1)).reshape(end.shape)) + centers
-        end = end.T
-
-        overlapping_points = np.arange(centers.shape[0])
-
-        for i in range(3):
-            axis = start[i]
-            argsorted = np.argsort(axis)
-            axis_end = end[i, argsorted]
-            axis_start = np.sort(axis)
-            diff = np.around(axis_start[1:] - axis_end[:-1], 3)
-            overlapping_intervals = argsorted[np.union1d(np.argwhere(diff < 0), np.argwhere(diff < 0) + 1)]
-            overlapping_points = np.intersect1d(overlapping_intervals, overlapping_points)
-
-        overlapping_adj_matrix = np.zeros(shape=(len(overlapping_points), len(overlapping_points)))
-        for idx in range(len(overlapping_points)):
-            i = overlapping_points[idx]
-            overlapping_args = np.arange(len(overlapping_points))
-            for j in range(3):
-                a = (np.intersect1d(np.argwhere(start[j, i] <= end[j, overlapping_points]).reshape(-1),
-                                    np.argwhere(start[j, i] >= start[j, overlapping_points]).reshape(-1)))
-                b = (np.intersect1d(np.argwhere(end[j, i] <= end[j, overlapping_points]).reshape(-1),
-                                    np.argwhere(end[j, i] >= start[j, overlapping_points]).reshape(-1)))
-                overlapping_args = np.intersect1d(overlapping_args, np.union1d(a, b))
-            for j in overlapping_args:
-                overlapping_adj_matrix[j][idx] = 1
-                overlapping_adj_matrix[idx][j] = 1
-
-        overlapping_adj_matrix -= np.eye(len(overlapping_adj_matrix))
-        remove_args = []
-
-        # remove anything gthat intersects with old cells
-        for i in np.argwhere(overlapping_points < old_cells_size).reshape(-1):
-            overlaps = np.argwhere(overlapping_adj_matrix[i] == 1).reshape(-1)
-            for point in overlaps:
-                remove_args.append(point)
-                overlapping_adj_matrix[point] = np.zeros(len(overlapping_adj_matrix))
-                overlapping_adj_matrix[:, point] = np.zeros(len(overlapping_adj_matrix))
-
-        while np.sum(overlapping_adj_matrix) > 0:
-            row = np.argmax(np.sum(overlapping_adj_matrix, axis=1))
-            remove_args.append(row)
-            overlapping_adj_matrix[row] = np.zeros(len(overlapping_adj_matrix))
-            overlapping_adj_matrix[:, row] = np.zeros(len(overlapping_adj_matrix))
-
-        print(f'{centers.shape[0]}. Overlapping #s: {len(remove_args)}')
-        return overlapping_points[remove_args] - old_cells_size

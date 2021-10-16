@@ -8,7 +8,7 @@ import matplotlib as mpl
 
 mpl.use('macosx')
 
-resolution = 100
+resolution = 40
 
 
 def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarray, gens: np.ndarray,
