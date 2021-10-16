@@ -63,13 +63,14 @@ class Network:
         mean_bud_angles = np.zeros(shape=(len(self.network), 2))
         for i in range(len(self.network)):
             # find the bud scars from all the children of this cell
-            child_bud_scars = np.array(self.network[self.mothers == self.ids[i]]['parent_bud_scar_angle'].values.tolist())
+            child_bud_scars = np.array(
+                self.network[self.mothers == self.ids[i]]['parent_bud_scar_angle'].values.tolist())
             # mother bud angle is at (-rx, 0, 0) on ellipsoid
             parent_bud_scar = np.array([-np.pi / 2, 0])
             if len(child_bud_scars) != 0:
                 # find the average bud scar location on the cell
                 child_bud_scars = np.sum(child_bud_scars, axis=0)
-                parent_bud_scar = (child_bud_scars + parent_bud_scar) / (len(child_bud_scars) + 1)
+                # parent_bud_scar = (child_bud_scars + parent_bud_scar) / (len(child_bud_scars) + 1)
             mean_bud_angles[i] = parent_bud_scar
 
         return mean_bud_angles
@@ -92,6 +93,8 @@ class Network:
         :param daughter: daughter cell
         :return:
         """
+        if N == 0:
+            return
         df = pd.DataFrame(
             {'id': np.arange(mothers.max() + 1, mothers.max() + N + 1), 'center': list(centers),
              'rotation': list(rotations),

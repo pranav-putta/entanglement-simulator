@@ -57,21 +57,27 @@ class SimEnvironment:
         # calculate rotation matrices
         v1 = np.tile(np.array([rx, 0, 0]), (N, 1))
         v2 = gradient
-        rotations = LinAlg.rotation_matrix_3d_vecs(v1, v2)
+        new_rotations = LinAlg.rotation_matrix_3d_vecs(v1, v2)
 
-        idxs_to_remove = LinAlg.check_overlaps(np.vstack([old_centers, new_centers]),
-                                               np.vstack([old_rotations, rotations]),
-                                               self.config.cell_properties.radius, len(old_centers))
+        max_id = max(self.network.ids)
+        child_ids = np.arange(max_id + 1, max_id + N + 1)
 
-        keep_slice = np.arange(N)
-        # np.delete(np.arange(len(new_centers)), idxs_to_remove)
+        ids = (self.network.ids, child_ids)
+        centers = (old_centers, new_centers)
+        rotations = (old_rotations, new_rotations)
+
+        remove_idxs = LinAlg.smart_collision(ids, centers, rotations, np.array([rx, ry, rz]))
+
+        keep_slice = np.delete(np.arange(N), np.searchsorted(child_ids, np.array(list(remove_idxs))))
 
         new_centers = new_centers[keep_slice]
-        rotations = rotations[keep_slice]
+        new_rotations = new_rotations[keep_slice]
         new_bud_angles = new_bud_angles[keep_slice]
         mother_ids = self.network.ids[keep_slice]
 
-        self.network.add_cells(len(keep_slice), new_centers, new_bud_angles, rotations, mother_ids, self.generation)
+        self.network.add_cells(len(keep_slice), new_centers, new_bud_angles, new_rotations, mother_ids,
+                               self.generation + 1)
+        print(f'generation {self.generation}. # of nodes: {len(self.network)}')
 
     def old_step(self):
         old_centers = self.network.cell_centers
