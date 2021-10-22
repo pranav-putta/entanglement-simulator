@@ -53,8 +53,8 @@ class SingleOverlapCollisionTest(unittest.TestCase):
         rotations = (np.array([np.eye(3), np.eye(3)]), np.array([np.eye(3), np.eye(3)]))
         radii = np.array([1.75, 1, 1])
         print(f"Testing: {centers}")
-        removal = LinAlg.smart_collision(ids, centers, rotations, radii)
-        self.assertEqual(len(removal), 1)
+        removal = LinAlg.smart_collision(ids, centers, rotations, radii, bound_volume=0)
+        self.assertEqual(1, len(removal))
 
     def test_collision2(self):
         # overlap, complete over id 0 and 4
@@ -85,7 +85,7 @@ class MultipleOverlapCollisionTest(unittest.TestCase):
         rotations = (np.array([np.eye(3), np.eye(3)]), np.array([np.eye(3), np.eye(3)]))
         radii = np.array([1.75, 1, 1])
         print(f"Testing: {centers[0].tolist()} -> {centers[1].tolist()}")
-        removal = LinAlg.smart_collision(ids, centers, rotations, radii)
+        removal = LinAlg.smart_collision(ids, centers, rotations, radii, bound_volume=0)
         print(removal)
         self.assertEqual(len(removal), 2)
 
@@ -113,7 +113,7 @@ class RotationCollisionTest(unittest.TestCase):
             np.array([np.eye(3)]),
             np.array(LinAlg.rotation_matrix_from_spherical_degs(np.array([45.0]), np.array([0.0]))))
         print(f"Testing: {centers[0].tolist()} -> {centers[1].tolist()}")
-        removal = LinAlg.smart_collision(ids, centers, rotations, radii)
+        removal = LinAlg.smart_collision(ids, centers, rotations, radii, bound_volume=0)
         self.assertEqual(len(removal), 1)
 
     def test_rotation_azimuthal_collision(self):
@@ -141,7 +141,7 @@ class RotationCollisionTest(unittest.TestCase):
         self.assertTrue(np.allclose(br, np.array([1, 1.75, 1]), atol=0.1))
 
     def test_bounding_box(self):
-        n = 1000
+        n = 25
         thetas = np.random.uniform(low=0, high=90, size=n)
         phis = np.random.uniform(low=0, high=360, size=n)
         radii = np.array([1.75, 1, 1])
@@ -172,6 +172,27 @@ class ConfigTest(unittest.TestCase):
     def test_load_config(self):
         config = ConfigLoader.load_config()
         print(config.cell_properties.radius)
+
+    def test_stuff(self):
+        theta = np.array([0.0, 90.0])  # np.arange(0, np.pi, 0.1)
+        phi = np.array([0.0, 0.0])  # np.arange(0, np.pi, 0.1)
+        rotations = LinAlg.rotation_matrix_from_spherical_degs(theta, phi)
+        radii = np.array([2, 1, 1])
+        a, b, c = radii
+        r = np.array(
+            [[a, b, c], [a, b, -c], [a, -b, c], [a, -b, -c], [-a, b, c], [-a, b, -c], [-a, -b, c], [-a, -b, -c]])
+
+        x = radii[2] * np.cos(phi) * np.cos(theta) + radii[1] * np.cos(theta) + radii[0] * np.sin(phi)
+        y = radii[1] * np.cos(phi) + radii[0] * np.sin(phi) * np.cos(theta)
+        z = radii[2] * np.sin(theta) + radii[0] * np.cos(theta)
+        vecs = (rotations @ r.reshape(*r.shape, 1)).reshape(r.shape)
+        rx = np.max(vecs[:, 0], axis=0)
+        ry = np.max(vecs[:, 1], axis=0)
+        rz = np.max(vecs[:, 2], axis=0)
+
+        self.assertTrue(np.allclose(rx, x))
+        self.assertTrue(np.allclose(ry, y))
+        self.assertTrue(np.allclose(rz, z))
 
 
 class VisualTest(unittest.TestCase):

@@ -2,8 +2,15 @@
 generations: 30
 root: [ 0, 0, 0 ]
 
+verbose: True
+
+simulation:
+  bound_volume: 0
+  bud_angle_pattern: 'none'
+  prune_collisions: True
+
 # properties
 cell_properties:
-  radius: [ 1.5, 1, 1 ] # x, y, z
+  radius: [ 2, 1, 1 ] # x, y, z
 
 

@@ -17,7 +17,11 @@ class SimEnvironment:
     def __init__(self, config: Configuration):
         self.config = config
         self.generation = 0
-        self.network = Network(root=Cell.root())
+        self.network = Network(root=Cell.root(), config=self.config)
+
+    def reset(self):
+        self.generation = 0
+        self.network = Network(root=Cell.root(), config=self.config)
 
     def run_until_size(self, size: int):
         while len(self.network.centers) < size:
@@ -30,10 +34,14 @@ class SimEnvironment:
             self.generation += 1
 
     def step(self):
+        """
+        steps through the next generation
+        :return:
+        """
         N = len(self.network)
         old_centers = self.network.centers
         old_rotations = self.network.rotations
-        old_bud_scars = self.network.mean_bud_scar_angle
+        old_bud_scars = self.network.pattern_bud_scar_angles
 
         # generate polar and azimuthal angles
         delta_angle = np.array([Stats.generate_polar_angle(N), Stats.generate_azimuthal_angle(N)]).transpose()
@@ -62,13 +70,17 @@ class SimEnvironment:
         max_id = max(self.network.ids)
         child_ids = np.arange(max_id + 1, max_id + N + 1)
 
+        # calculate collisions
         ids = (self.network.ids, child_ids)
         centers = (old_centers, new_centers)
         rotations = (old_rotations, new_rotations)
 
+        remove_idxs = LinAlg.smart_collision(ids, centers, rotations, np.array([rx, ry, rz]),
+                                             bound_volume=self.config.simulation.bound_volume,
+                                             prune=self.config.simulation.prune_collisions,
+                                             verbose=self.config.verbose)
 
-        remove_idxs = LinAlg.smart_collision(ids, centers, rotations, np.array([rx, ry, rz]))
-
+        # remove collision events
         keep_slice = np.delete(np.arange(N), np.searchsorted(child_ids, np.array(list(remove_idxs))))
 
         new_centers = new_centers[keep_slice]
@@ -78,4 +90,5 @@ class SimEnvironment:
 
         self.network.add_cells(len(keep_slice), new_centers, new_bud_angles, new_rotations, mother_ids,
                                self.generation + 1)
-        print(f'generation {self.generation}. # of nodes: {len(self.network)}')
+        if self.config.verbose:
+            print(f'generation {self.generation}. # of nodes: {len(self.network)}')

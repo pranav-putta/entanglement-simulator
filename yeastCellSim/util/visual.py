@@ -8,7 +8,7 @@ import matplotlib as mpl
 
 mpl.use('macosx')
 
-resolution = 40
+resolution = 20
 
 
 def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarray, gens: np.ndarray,
@@ -24,8 +24,6 @@ def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarra
     colors = ['blue', 'green', 'red', 'pink', 'yellow',
               'cyan', 'salmon', 'tomato', 'slategrey', 'orange']
 
-    mxx, mxy, mxz = 0, 0, 0
-    mix, miy, miz = 0, 0, 0
     for i in range(0, len(cells)):
         cell = cells[i]
         budsite = buds[i]
@@ -44,21 +42,15 @@ def draw_cell(fig, ax, cells: np.ndarray, rotations: np.ndarray, buds: np.ndarra
         y += cell[1]
         z += cell[2]
 
-        mxx = max(mxx, np.max(np.abs(x)))
-        mxy = max(mxy, np.max(np.abs(y)))
-        mxz = max(mxz, np.max(np.abs(z)))
-
-        mix = np.min(x)
-        miy = np.min(y)
-        miz = np.min(z)
         # Plot:
         ax.plot_surface(x, y, z, rstride=4, cstride=4, color=colors[gens[i] % len(colors)])
         # ax.quiver(budsite[0], budsite[1], budsite[2], cell[0], cell[1], cell[2], color=colors[gens[i] % len(colors)])
 
     # Adjustment of the axes, so that they all have the same span:
-    max_radius = max(mxx, mxy, mxz)
-    print(max_radius)
-    for axis in 'xyz':
-        getattr(ax, 'set_{}lim'.format(axis))((-max_radius, max_radius))
+    max_radius = cells.max(axis=0) + 3
+    min_radius = cells.min(axis=0) - 3
+    getattr(ax, 'set_{}lim'.format('x'))((min_radius[0], max_radius[0]))
+    getattr(ax, 'set_{}lim'.format('y'))((min_radius[1], max_radius[1]))
+    getattr(ax, 'set_{}lim'.format('z'))((min_radius[2], max_radius[2]))
 
     print(f'Number of cells {len(cells)}')

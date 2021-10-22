@@ -3,11 +3,15 @@ import util.visual
 from util.util import ConfigLoader
 from matplotlib import pyplot as plt
 import numpy as np
+import time
 
+now = time.time()
 
-config = ConfigLoader.load_config()
+np.random.seed(10)
+
+config = ConfigLoader.load_config(path_to_config='./config.yaml')
 simulation = SimEnvironment(config)
-simulation.run_until_size(75)
+simulation.run_until_size(300)
 print(f'Number of cells: {len(simulation.network.centers)}')
 print(f'Number of generations: {simulation.generation}')
 
@@ -17,3 +21,7 @@ util.visual.draw_cell(fig, ax, simulation.network.centers, simulation.network.ro
                       simulation.network.bud_scars, simulation.network.generations,
                       config)
 plt.show()
+
+end = time.time()
+
+print(f"simulation took: {(end - now)} seconds.")

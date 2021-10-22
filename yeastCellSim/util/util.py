@@ -6,14 +6,13 @@ from models.config import Configuration, CellProperties
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import os
-
-np.random.seed(45998)
+from scipy.stats import skewnorm
 
 
 class ConfigLoader:
 
     @staticmethod
-    def load_config(path_to_config='./config.yaml'):
+    def load_config(path_to_config='../config.yaml'):
         """
         load configuration file from yaml into access types
         :param path_to_config:
@@ -31,8 +30,12 @@ class Stats:
         return np.power(np.random.uniform(0, 1, size=n), skew) * (b - a) + a
 
     @staticmethod
+    def _sample_normal_dist(a: float, b: float, skew: float, n:int):
+        return np.abs(skewnorm.rvs(skew, size=n) * (b - a) / 2 + 10)
+
+    @staticmethod
     def generate_polar_angle(n: int):
-        return Stats._sample_uniform_dist(0, 120, 3, n) * np.pi / 180.0
+        return Stats._sample_normal_dist(0, 120, 2.5, n) * np.pi / 180.0
 
     @staticmethod
     def generate_azimuthal_angle(n: int):
@@ -52,7 +55,7 @@ class LinAlg:
 
     @staticmethod
     def rotation_matrix_from_spherical(theta, azimuthal):
-        start = np.tile(np.array([1, 0, 0]), (theta.shape[0], 1))
+        start = np.tile(np.array([0, 0, 1]), (theta.shape[0], 1))
         end = np.array(
             [np.sin(theta) * np.cos(azimuthal), np.sin(theta) * np.sin(azimuthal), np.cos(theta)]).transpose()
         return LinAlg.rotation_matrix_3d_vecs(start, end)
@@ -124,7 +127,20 @@ class LinAlg:
         return bounding_radius
 
     @staticmethod
-    def smart_collision(ids: tuple, centers: tuple, rotations: tuple, radii: np.ndarray, bound_volume=0):
+    def smart_collision(ids: tuple, centers: tuple, rotations: tuple, radii: np.ndarray, bound_volume=0,
+                        remove_children=False, prune=True, verbose=True):
+        """
+        detects collisions in cells.
+        :param ids: (child, parent)
+        :param centers: (child, parent)
+        :param rotations: (child, parent)
+        :param radii: cell radius properties
+        :param bound_volume: volume to confirm collision
+        :param remove_children: if there is a collision between parent and child, remove the child
+        :param prune: prune collision tree
+        :param verbose: show debug statements
+        :return:
+        """
         parent_ids, child_ids = ids
         parent_centers, child_centers = centers
         parent_rots, child_rots = rotations
@@ -157,15 +173,17 @@ class LinAlg:
                 [2 * (i % 2) - 1, 2 * ((i // 2) % 2) - 1, 2 * ((i // 4) % 2) - 1])
             for j in range(len(corners)):
                 hash_point(corners[j], j)
+        if not prune:
+            spatial_graph = {(0, 0): np.arange(len(centers))}
 
         max_bucket_size = 0
         for val in spatial_graph.values():
             max_bucket_size = max(max_bucket_size, len(val))
         removed_ids = set()
-        print(f'\nNumber of cells: {len(centers)}, checking max: {max_bucket_size}')
-        #spatial_graph = {(0, 0): np.arange(len(centers))}
+
         # check collisions
         for block, collision_ids in spatial_graph.items():
+            # for each spatial block, check all collisions between nodes in that area
             collision_ids = np.array(list(set(collision_ids) - removed_ids))
             n = len(collision_ids)
             collisions = np.zeros(shape=(n, n))
@@ -184,30 +202,39 @@ class LinAlg:
                     e1, e2 = c1 + br1, c2 + br2
                     starts, ends = np.vstack([s1, s2]), np.vstack([e1, e2])
                     if np.all(np.max(starts, axis=0) < np.min(ends, axis=0)):
+                        # make sure that overlap region reaches at least bound threshold
                         if np.prod(np.abs(np.max(starts, axis=0) - np.min(ends, axis=0))) < bound_volume:
                             continue
                         # collision detected
                         collisions[i][j] = 1
                         collisions[j][i] = 1
+            # remove collisions by removing largest connected components first
             while np.sum(collisions) > 0:
                 remove = np.argmax(np.sum(collisions, axis=0))
 
+                # if node is a child, just remove it
                 if ids[collision_ids[remove]] not in parent_ids:
                     collisions[remove, :] = np.zeros(n)
                     collisions[:, remove] = np.zeros(n)
 
                     removed_ids.add(ids[collision_ids[remove]])
+                # if node is a parent, remove all of the nodes overlapping it since we can't remove the parent
                 else:
                     child_removals = np.argwhere(collisions[remove] == 1)
                     for child in child_removals:
                         child_id = ids[collision_ids[int(child)]]
 
                         # check if child of parent. make sure the child is only overlapping with its parent
-                        if (not np.all(np.argwhere(child_ids == child_id) == np.argwhere(
-                                parent_ids == ids[collision_ids[remove]]))) or np.sum(collisions[int(child), :]) > 1:
+                        # if child is a parent that ONLY overlaps with its parent, let it continue
+
+                        if ((not np.all(np.argwhere(child_ids == child_id) == np.argwhere(
+                                parent_ids == ids[collision_ids[remove]]))) or np.sum(
+                            collisions[int(child), :]) > 1) or remove_children:
                             removed_ids.add(ids[collision_ids[int(child)]])
 
                         collisions[int(child), :] = np.zeros(n)
                         collisions[:, int(child)] = np.zeros(n)
-        print(f'{len(removed_ids)} Collisions Found for {len(ids)} nodes.')
+        if verbose:
+            print(f'\nNumber of cells: {len(centers)}, checking max: {max_bucket_size}')
+            print(f'{len(removed_ids)} Collisions Found for {len(ids)} nodes.')
         return removed_ids

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, fields, astuple
 import numpy as np
 import pandas as pd
+from models.config import Configuration
 
 
 @dataclass
@@ -30,9 +31,10 @@ class Cell:
 class Network:
     network: pd.DataFrame
 
-    def __init__(self, root: Cell):
+    def __init__(self, root: Cell, config: Configuration):
         self.network = pd.DataFrame(columns=[field.name for field in fields(Cell)])
         self.network.loc[0] = list(astuple(root))
+        self.config = config
 
     @property
     def ids(self):
@@ -59,7 +61,15 @@ class Network:
         return self['mother_id']
 
     @property
-    def mean_bud_scar_angle(self):
+    def pattern_bud_scar_angles(self):
+        pattern = self.config.simulation.bud_angle_pattern
+        if pattern == 'mean':
+            return self.mean_bud_scar_angles
+        else:
+            return np.tile(np.array([-np.pi / 2, 0]), (len(self.network), 1))
+
+    @property
+    def mean_bud_scar_angles(self):
         mean_bud_angles = np.zeros(shape=(len(self.network), 2))
         for i in range(len(self.network)):
             # find the bud scars from all the children of this cell
@@ -70,7 +80,7 @@ class Network:
             if len(child_bud_scars) != 0:
                 # find the average bud scar location on the cell
                 child_bud_scars = np.sum(child_bud_scars, axis=0)
-                # parent_bud_scar = (child_bud_scars + parent_bud_scar) / (len(child_bud_scars) + 1)
+                parent_bud_scar = (child_bud_scars + parent_bud_scar) / (len(child_bud_scars) + 1)
             mean_bud_angles[i] = parent_bud_scar
 
         return mean_bud_angles
